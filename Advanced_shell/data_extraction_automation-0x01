@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Extract and format data using jq, sed, and awk
+
+if ! jq empty data.json 2>/dev/null; then
+    echo "Error: data.json is not valid JSON" >&2
+    exit 1
+fi
+
+jq -r '
+    if (.name? and .types? and .weight? and .height?) then
+        [
+            .name,
+            (.types[0].type.name // "unknown"),
+            .weight,
+            .height
+        ] | @tsv
+    else
+        "Error: Missing required fields in JSON data" | halt_error(1)
+    end
+' data.json | 
+awk -F'\t' '{
+    if (NF == 4) {
+        weight_kg = $3 / 10
+        height_m = $4 / 10
+        type = toupper(substr($2, 1, 1)) substr($2, 2)
+        name = toupper(substr($1, 1, 1)) substr($1, 2)
+        printf "%s is of type %s, weighs %.1fkg, and is %.1fm tall.\n", 
+            name, type, weight_kg, height_m
+    } else {
+        print "Error: Unexpected data format" > "/dev/stderr"
+        exit 1
+    }
+}'

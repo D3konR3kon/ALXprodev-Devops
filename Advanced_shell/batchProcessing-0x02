@@ -1,0 +1,30 @@
+#!/bin/bash
+
+
+base_url="https://pokeapi.co/api/v2/pokemon"
+delay=2
+
+for id in {1..5}; do
+    echo "Fetching data for Pokémon #$id..."
+    
+    name=$(curl -s "$base_url/$id" | jq -r '.name')
+    if [[ -z "$name" || "$name" == "null" ]]; then
+        echo "Failed to get name for ID $id. Skipping..."
+        continue
+    fi
+
+    filename="${name}.json"
+    
+    curl -s "$base_url/$id" > "$filename"
+    
+    if jq empty "$filename" 2>/dev/null; then
+        echo "Successfully saved #$id ($name) to $filename"
+    else
+        echo "Invalid data for #$id! Removing file..."
+        rm -f "$filename"
+    fi
+    
+    sleep "$delay" 
+done
+
+echo "Finito! Fetched Pokémon 1-5.""

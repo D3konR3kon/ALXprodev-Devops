@@ -1,0 +1,43 @@
+#!/bin/bash
+
+report="pokemon_report.csv"
+
+echo "Name,Height(m),Weight(kg)" > "$report"
+
+for file in *.json; do
+
+    if ! jq empty "$file" 2>/dev/null; then
+        echo "Skipping invalid file: $file" >&2
+        continue
+    fi
+
+    name=$(jq -r '.name? // empty' "$file" 2>/dev/null)
+    height=$(jq -r '(.height? // 0) / 10' "$file" 2>/dev/null)
+    weight=$(jq -r '(.weight? // 0) / 10' "$file" 2>/dev/null)
+
+    if [[ -z "$name" ]]; then
+        echo "Missing 'name' in $file. Skipping..." >&2
+        continue
+    fi
+
+    echo "$name,$height,$weight" >> "$report"
+    echo "Processed: $name"
+done
+
+awk -F',' '
+NR > 1 {  # Skip header
+    height_sum += $2
+    weight_sum += $3
+    count++
+}
+END {
+    if (count > 0) {
+        printf "\nAverages:\n"
+        printf "Height: %.2fm\n", height_sum/count
+        printf "Weight: %.2fkg\n", weight_sum/count
+    } else {
+        print "No valid Pokémon data found." > "/dev/stderr"
+    }
+}' "$report"
+
+echo "CSV Report generated at: $report"

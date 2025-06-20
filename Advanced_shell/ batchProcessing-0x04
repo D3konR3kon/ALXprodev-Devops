@@ -1,0 +1,61 @@
+#!/bin/bash
+
+base_url="https://pokeapi.co/api/v2/pokemon"
+max_parallel=3         
+retry_delay=1            
+max_retries=3            
+error_log="api_errors.log" > "$error_log"
+
+
+fetch_pokemon() {
+    local id=$1
+    local attempt=0
+    local success=0
+
+    while [[ $attempt -lt $max_retries && $success -eq 0 ]]; do
+        ((attempt++))
+        
+
+        if response=$(curl -s --fail $base_url/$id 2>/dev/null); then
+            echo $response 
+            name=$(jq -r '.name' <<< "$response" 2>/dev/null)
+            
+            if [[ -n "$name" && "$name" != "null" ]]; then
+
+                echo "$response" > "${name}.json"
+                echo "#$id ($name) succeeded (Attempt $attempt)"
+                success=1
+            else
+                echo "#$id invalid data (Attempt $attempt) $response " >> "$error_log"
+            fi
+        else
+            echo " #$id network failure (Attempt $attempt)" >> "$error_log"
+        fi
+
+        [[ $success -eq 0 ]] && sleep $retry_delay
+    done
+
+    [[ $success -eq 0 ]] && echo "#$id failed after $max_retries attempts" >> "$error_log"
+    return $success
+}
+
+echo "Fetching Pokémon 1-5 with $max_parallel parallel threads..."
+job_count=0
+
+for id in {1..5}; do
+    while [[ $(jobs -rp | wc -l) -ge $max_parallel ]]; do
+        sleep 0.1
+    done
+
+    fetch_pokemon "$id" &
+    ((job_count++))
+    echo "Initiated #$id (Job $job_count)"
+done
+
+
+wait
+echo -e "\n Results:"
+echo "──────────────────────────"
+grep -v "succeeded" "$error_log" 2>/dev/null || echo "All Pokémon fetched successfully!"
+echo "──────────────────────────"
+echo "Total processed: $job_count"
